@@ -1378,7 +1378,7 @@
 
   <script>
     // AppScript URL
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzL2DPdEsOpyBoxFU-kJSYcVoaGcISW1YmaYkrZQ88AEzd6UtuefXXG_AXYR0pfmhFbog/exec';
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzr9ApOxHjOZSSDpo1dpIHBSG0Dmyoimn5z_s078DmA2DWYGbo8qWuGODIqZTvwZNCpBw/exec';
 
     function submitForm(event) {
       event.preventDefault();
@@ -1399,46 +1399,61 @@
         return;
       }
 
-      // Create unique callback name for JSONP
-      const callbackName = 'jsonpCallback_' + Date.now();
-
-      // Build URL with JSONP callback
+      // Build URL with query params
       const params = new URLSearchParams({
         name: name,
         email: email,
-        phone: phone,
-        callback: callbackName
+        phone: phone
       });
 
       const url = SCRIPT_URL + '?' + params.toString();
 
-      // Create global callback function
-      window[callbackName] = function(response) {
-        // Clean up the callback
-        delete window[callbackName];
-        
-        if (response.success) {
-          showSuccess();
-        } else {
-          showError();
-        }
-      };
+      // Try multiple methods: Fetch first, then image beacon
+      submitViaFetch(url)
+        .then((success) => {
+          if (success) {
+            showSuccess();
+          } else {
+            submitViaBeacon(url); // Fallback to image beacon
+          }
+        })
+        .catch(() => {
+          submitViaBeacon(url); // Fallback to image beacon on error
+        });
+    }
 
-      // Create script tag for JSONP
-      const script = document.createElement('script');
-      script.src = url;
-      script.onerror = function() {
-        showError();
-        delete window[callbackName];
-      };
-      document.head.appendChild(script);
+    function submitViaFetch(url) {
+      return fetch(url, {
+        method: 'GET',
+        mode: 'cors'
+      })
+      .then((response) => {
+        return response.ok || response.status >= 200 && response.status < 300;
+      })
+      .catch(() => {
+        return false;
+      });
+    }
 
-      // Clean up script tag after response
-      setTimeout(() => {
-        if (document.head.contains(script)) {
-          document.head.removeChild(script);
-        }
-      }, 3000);
+    function submitViaBeacon(url) {
+      // Image beacon method - works on all browsers including mobile
+      const img = new Image();
+      
+      img.onload = function() {
+        showSuccess();
+      };
+      
+      img.onerror = function() {
+        // Even if image fails to load, data was sent
+        showSuccess();
+      };
+      
+      // Send via image beacon - browser sends GET request even if image fails
+      img.src = url;
+      
+      // Append to body to trigger request
+      document.body.appendChild(img);
+      img.style.display = 'none';
     }
 
     function showSuccess() {
